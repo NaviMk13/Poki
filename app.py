@@ -1,61 +1,75 @@
 import streamlit as st
 
-# --- 1. STREAMLIT PAGE SETUP ---
-st.set_page_config(page_title="VELO-DASH 3D Open World Simulator", layout="wide", page_icon="🚴‍♂️")
+# --- 1. STREAMLIT CONFIG & DESIGN ---
+st.set_page_config(page_title="Tour de Stream 3D", layout="wide", page_icon="🚴‍♂️")
 
 st.markdown("""
     <style>
     .stApp {
-        background-color: #090d16;
+        background-color: #0b0f19;
         color: #ffffff;
     }
     iframe {
-        border: 4px solid #00f0ff !important;
+        border: 4px solid #facc15 !important; /* Tour de France Gelb */
         border-radius: 15px;
-        box-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
+        box-shadow: 0 0 35px rgba(250, 204, 21, 0.25);
     }
     h1 {
         font-family: 'Impact', sans-serif;
-        color: #00f0ff !important;
-        text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+        color: #facc15 !important;
+        text-shadow: 3px 3px 0px #000000;
         text-align: center;
         text-transform: uppercase;
+        letter-spacing: 2px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚴‍♂️ VELO-DASH 3D: REALTIME OPEN-WORLD SIMULATOR")
-st.write("<p style='text-align:center; color:#94a3b8;'>Echte 3D Game Engine in Streamlit eingebettet. Perfekt für das Schul-WLAN!</p>", unsafe_allow_html=True)
+st.title("💛 TOUR DE STREAM 3D: ALPEN-ETAPPE 💛")
+st.write("<p style='text-align:center; color:#94a3b8;'>Klicke einmal in das Spielfeld, um die Steuerung zu aktivieren! Erklimmt den Col du Stream!</p>", unsafe_allow_html=True)
 
-# --- 2. THE EMBEDDED 3D ENGINE (HTML / JAVASCRIPT / THREE.JS) ---
-# Dieser riesige Block wird als flüssige WebGL-App direkt im Browser gerendert.
-three_js_code = """
+# --- 2. MULTIPLAYER 3D ENGINE COOKED WITH THREE.JS ---
+tour_de_france_code = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <style>
-        body { margin: 0; overflow: hidden; background-color: #090d16; font-family: monospace; }
-        #canvas-container { width: 100vw; height: 75vh; }
+        body { margin: 0; overflow: hidden; background-color: #0b0f19; font-family: 'Arial', sans-serif; }
+        #canvas-container { width: 100vw; height: 78vh; }
         #hud {
             position: absolute; top: 15px; left: 15px;
-            color: #00f0ff; background: rgba(11, 15, 25, 0.85);
-            padding: 15px; border-radius: 10px; border: 2px solid #00f0ff;
-            pointer-events: none; font-size: 14px; box-shadow: 0 0 15px rgba(0,240,255,0.2);
+            color: #ffffff; background: rgba(15, 23, 42, 0.9);
+            padding: 20px; border-radius: 12px; border: 3px solid #facc15;
+            pointer-events: none; width: 280px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
         }
-        .player-stat { margin: 5px 0; font-size: 16px; font-weight: bold; }
+        .racer-stat { margin: 8px 0; font-size: 15px; font-weight: bold; padding: 6px; border-radius: 6px; }
+        #click-alert {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #facc15; color: #000; padding: 10px 20px; font-weight: bold;
+            border-radius: 20px; animation: pulse 1.5s infinite; font-size: 14px;
+        }
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
     <div id="hud">
-        <h2 style="margin: 0 0 10px 0; color: #facc15;">🏎️ 3D MULTIPLAYER DUEL</h2>
-        <div class="player-stat" style="color: #ef4444;">🔴 SPIELER 1 (Aero-Bike): <span id="sp1">0 km/h</span><br><small>Steuerung: W, A, S, D</small></div>
-        <div class="player-stat" style="color: #3b82f6;">🔵 SPIELER 2 (Gravel-Bike): <span id="sp2">0 km/h</span><br><small>Steuerung: Pfeiltasten</small></div>
-        <hr style="border-color: #00f0ff;">
-        <div id="target-info" style="color: #22c55e; font-weight: bold;">Nächstes Ziel-Tor aktiv! Wer erreicht es zuerst?</div>
+        <h3 style="margin: 0 0 10px 0; color: #facc15; text-align:center; text-transform:uppercase;">Le Tour Simulator</h3>
+        <div class="racer-stat" style="background: rgba(239, 68, 68, 0.2); border-left: 4px solid #ef4444;">
+            🔴 Maillot Rouge: <span id="sp1">0 km/h</span><br>
+            <small style="color: #cbd5e1;">Tasten: W (Gas), S, A, D</small>
+        </div>
+        <div class="racer-stat" style="background: rgba(59, 130, 246, 0.2); border-left: 4px solid #3b82f6;">
+            🔵 Maillot Bleu: <span id="sp2">0 km/h</span><br>
+            <small style="color: #cbd5e1;">Tasten: Pfeiltasten (↑, ↓, ←, →)</small>
+        </div>
+        <hr style="border-color: #334155;">
+        <div style="font-size:12px; color:#a1a1aa; text-align:center;">Bergwertung: Wer bezwingt die Serpentinen?</div>
     </div>
+
+    <div id="click-alert" id="alert-box">⚠️ ZUERST HIER REINKLICKEN ZUM STEUERN!</div>
 
     <div id="canvas-container"></div>
 
@@ -63,181 +77,253 @@ three_js_code = """
         // --- 1. ENGINE BASIC SETUP ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0f172a); // Stylischer Nachthimmel
-        scene.fog = new THREE.FogExp2(0x0f172a, 0.015); // Nebel für Open-World-Tiefe
+        scene.background = new THREE.Color(0xbfe3dd); // Schöner französischer Sommerhimmel
+        scene.fog = new THREE.FogExp2(0xbfe3dd, 0.007);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight * 0.75);
+        renderer.setSize(window.innerWidth, window.innerHeight * 0.78);
+        renderer.shadowMap.enabled = true;
         container.appendChild(renderer.domElement);
 
-        // Lichteffekte
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        // Beleuchtung für die Bergetappe
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0x00f0ff, 1);
-        dirLight.position.set(50, 100, 50);
-        scene.add(dirLight);
+        const sunLight = new THREE.DirectionalLight(0xfffaed, 1.2);
+        sunLight.position.set(100, 150, 50);
+        scene.castShadow = true;
+        scene.shadow.mapSize.width = 2048;
+        scene.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
 
-        // --- 2. OPEN WORLD GEOMETRIE (Die Map) ---
-        // Der Rasen/Asphalt
-        const floorGeo = new THREE.PlaneGeometry(1000, 1000);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+        // Hide Alert on click
+        window.addEventListener('click', () => {
+            const alertBox = document.getElementById('click-alert');
+            if(alertBox) alertBox.style.display = 'none';
+        });
 
-        // Ein Gitternetz auf dem Boden für die Geschwindigkeits-Illusion
-        const grid = new THREE.GridHelper(1000, 100, 0x00f0ff, 0x334155);
-        grid.position.y = 0.01;
-        scene.add(grid);
+        // --- 2. MAP DESIGN: TOUR DE FRANCE ALPINE PASS ---
+        // Das Bergterrain (Boden)
+        const terrainGeo = new THREE.PlaneGeometry(2000, 2000, 20, 20);
+        terrainGeo.rotateX(-Math.PI / 2);
+        const terrainMat = new THREE.MeshStandardMaterial({ color: 0x3d7a44, roughness: 0.9 }); // Alpengras
+        const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+        scene.add(terrain);
 
-        // Random Hindernisse & Gebäude in der Open World spawnen
-        const buildings = [];
-        for(let i=0; i<60; i++) {
-            const h = Math.random() * 30 + 10;
-            const bGeo = new THREE.BoxGeometry(10, h, 10);
-            const bMat = new THREE.MeshStandardMaterial({ color: 0x334155, wireframe: Math.random() > 0.5 });
-            const b = new THREE.Mesh(bGeo, bMat);
-            b.position.set((Math.random()-0.5)*400, h/2, (Math.random()-0.5)*400);
-            scene.add(b);
+        // Serpentinen-Rennstrecke (Ein geschwungener Asphaltkurs)
+        const roadGroup = new THREE.Group();
+        scene.add(roadGroup);
+
+        // Wir generieren eine kurvige Passstraße über mathematische Kurven (Splines)
+        const points = [];
+        points.push(new THREE.Vector3(0, 0.1, 400));
+        points.push(new THREE.Vector3(-80, 0.1, 250));
+        points.push(new THREE.Vector3(120, 0.1, 100));
+        points.push(new THREE.Vector3(-140, 0.1, -50));
+        points.push(new THREE.Vector3(60, 0.1, -200));
+        points.push(new THREE.Vector3(0, 0.1, -400));
+
+        const curve = new THREE.CatmullRomCurve3(points);
+        const roadGeo = new THREE.TubeGeometry(curve, 200, 14, 8, false);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.7 }); // Grauer Asphalt
+        const asphalt = new THREE.Mesh(roadGeo, roadMat);
+        asphalt.scale.y = 0.01; // Flach auf den Boden drücken
+        roadGroup.add(asphalt);
+
+        // Dekorationen: Tannen & Zuschauer entlang der Strecke platzieren
+        const curvePoints = curve.getPoints(150);
+        curvePoints.forEach((pt, idx) => {
+            if(idx % 3 === 0) {
+                // Tannenbaum spawnen
+                const treeGroup = new THREE.Group();
+                const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 2);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 1;
+                treeGroup.add(trunk);
+
+                const leavesGeo = new THREE.ConeGeometry(3, 7, 5);
+                const leavesMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.8 });
+                const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+                leaves.position.y = 4.5;
+                treeGroup.add(leaves);
+
+                // Seitlich der Straße versetzen
+                const sideOffset = (Math.random() > 0.5 ? 20 : -20) + (Math.random() * 5);
+                treeGroup.position.set(pt.x + sideOffset, 0, pt.z + (Math.random() * 5));
+                scene.add(treeGroup);
+            }
+
+            if(idx % 5 === 0) {
+                // Zuschauer / Flaggen-Masten spawnen (Tour de France Feeling!)
+                const flagGroup = new THREE.Group();
+                const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 6);
+                const poleMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+                const pole = new THREE.Mesh(poleGeo, poleMat);
+                pole.position.y = 3;
+                flagGroup.add(pole);
+
+                // Tricolore Flagge (Frankreich)
+                const flagGeo = new THREE.BoxGeometry(2, 1.2, 0.1);
+                const flagMat = new THREE.MeshBasicMaterial({ color: 0x002395 }); // Blau (Stellvertretend)
+                const flag = new THREE.Mesh(flagGeo, flagMat);
+                flag.position.set(1, 5.4, 0);
+                flagGroup.add(flag);
+
+                const flagOffset = idx % 2 === 0 ? 10 : -10;
+                flagGroup.position.set(pt.x + flagOffset, 0, pt.z);
+                scene.add(flagGroup);
+            }
+        });
+
+        // --- 3. RICHTIGE 3D RENNRÄDER BAUEN ---
+        function create3dBike(colorHex) {
+            const bike = new THREE.Group();
+
+            // Rahmen (Dünne Tubes/Zylinder)
+            const frameMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.5 });
+            const pipeGeo = new THREE.CylinderGeometry(0.1, 0.1, 3);
+            pipeGeo.rotateZ(Math.PI / 4);
+            
+            const mainTriangle = new THREE.Mesh(pipeGeo, frameMat);
+            mainTriangle.position.set(0, 1.5, 0);
+            bike.add(mainTriangle);
+
+            // Laufräder (Torus Geometrie für echte Felgen + Speichen-Zentrum)
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+            const wheelGeo = new THREE.TorusGeometry(0.9, 0.15, 8, 24);
+            
+            const frontWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            frontWheel.position.set(1.8, 0.9, 0);
+            bike.add(frontWheel);
+
+            const backWheel = new THREE.Mesh(wheelGeo, wheelMat);
+            backWheel.position.set(-1.8, 0.9, 0);
+            bike.add(backWheel);
+
+            // Lenker & Sattel
+            const componentMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const handlebarGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.4);
+            handlebarGeo.rotateX(Math.PI / 2);
+            const handlebar = new THREE.Mesh(handlebarGeo, componentMat);
+            handlebar.position.set(1.5, 2.5, 0);
+            bike.add(handlebar);
+
+            const saddleGeo = new THREE.BoxGeometry(0.6, 0.15, 0.3);
+            const saddle = new THREE.Mesh(saddleGeo, componentMat);
+            saddle.position.set(-0.6, 2.3, 0);
+            bike.add(saddle);
+
+            bike.castShadow = true;
+            return { mesh: bike, frontWheel: frontWheel, backWheel: backWheel };
         }
 
-        // --- 3. DIE FAHRER (3D-Objekte) ---
-        // Spieler 1 (Rot)
-        const p1Geo = new THREE.ConeGeometry(1.5, 4, 4);
-        const p1Mat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
-        const p1Mesh = new THREE.Mesh(p1Geo, p1Mat);
-        p1Mesh.rotation.x = Math.PI / 2; // Liegend wie ein Pfeil/Fahrrad
-        p1Mesh.position.set(-10, 2, 0);
-        scene.add(p1Mesh);
+        const player1 = create3dBike(0xef4444); // Rotes Rennrad
+        player1.mesh.position.set(-3, 0, 380);
+        scene.add(player1.mesh);
 
-        // Spieler 2 (Blau)
-        const p2Geo = new THREE.ConeGeometry(1.5, 4, 4);
-        const p2Mat = new THREE.MeshStandardMaterial({ color: 0x3b82f6 });
-        const p2Mesh = new THREE.Mesh(p2Geo, p2Mat);
-        p2Mesh.rotation.x = Math.PI / 2;
-        p2Mesh.position.set(10, 2, 0);
-        scene.add(p2Mesh);
+        const player2 = create3dBike(0x3b82f6); // Blaues Rennrad
+        player2.mesh.position.set(3, 0, 380);
+        scene.add(player2.mesh);
 
-        // Das Ziel-Tor (Leuchtende grüne Kugel)
-        const targetGeo = new THREE.SphereGeometry(4, 16, 16);
-        const targetMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, wireframe: true });
-        const targetMesh = new THREE.Mesh(targetGeo, targetMat);
-        function relocateTarget() {
-            targetMesh.position.set((Math.random()-0.5)*200, 4, (Math.random()-0.5)*200);
-        }
-        relocateTarget();
-        scene.add(targetMesh);
 
-        // --- 4. ENGINE STEUERUNGS-LOGIK ---
-        const keys = {};
-        window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
-        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+        // --- 4. ROBUSTE TASTATUR-STEUERUNG ---
+        const keyMap = {};
+        
+        // Event-Listener direkt an das Window binden
+        window.addEventListener('keydown', (e) => { 
+            keyMap[e.key.toLowerCase()] = true; 
+        });
+        window.addEventListener('keyup', (e) => { 
+            keyMap[e.key.toLowerCase()] = false; 
+        });
 
-        // Physik-Variablen für beide Fahrer
-        const p1 = { speed: 0, maxSpeed: 1.8, accel: 0.04, friction: 0.97, angle: 0, rotSpeed: 0.04 };
-        const p2 = { speed: 0, maxSpeed: 1.8, accel: 0.04, friction: 0.97, angle: 0, rotSpeed: 0.04 };
+        // Fahrphysik Datenstrukturen
+        const bike1 = { speed: 0, angle: Math.PI, maxSpeed: 1.6, accel: 0.03, friction: 0.96 };
+        const bike2 = { speed: 0, angle: Math.PI, maxSpeed: 1.6, accel: 0.03, friction: 0.96 };
 
-        // Kamera-Modus Variablen
-        camera.position.set(0, 45, 90);
-
-        // --- 5. MAIN GAME LOOP (60 FPS Echtzeit) ---
+        // --- 5. GAME ENGINE LOOP (60 FPS) ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // --- STEUERUNG SPIELER 1 (WASD) ---
-            if (keys['w']) p1.speed = Math.min(p1.maxSpeed, p1.speed + p1.accel);
-            if (keys['s']) p1.speed = Math.max(-p1.maxSpeed/2, p1.speed - p1.accel);
-            if (keys['a']) p1.angle += p1.rotSpeed * (p1.speed >= 0 ? 1 : -1);
-            if (keys['d']) p1.angle -= p1.rotSpeed * (p1.speed >= 0 ? 1 : -1);
+            // --- SPIELER 1 ENGINE LOGIK (WASD) ---
+            if (keyMap['w']) bike1.speed = Math.min(bike1.maxSpeed, bike1.speed + bike1.accel);
+            if (keyMap['s']) bike1.speed = Math.max(-bike1.maxSpeed/3, bike1.speed - bike1.accel);
+            if (keyMap['a']) bike1.angle += 0.035 * (bike1.speed >= 0 ? 1 : -1);
+            if (keyMap['d']) bike1.angle -= 0.035 * (bike1.speed >= 0 ? 1 : -1);
 
-            // --- STEUERUNG SPIELER 2 (Pfeiltasten) ---
-            if (keys['arrowup']) p2.speed = Math.min(p2.maxSpeed, p2.speed + p2.accel);
-            if (keys['arrowdown']) p2.speed = Math.max(-p2.maxSpeed/2, p2.speed - p2.accel);
-            if (keys['arrowleft']) p2.angle += p2.rotSpeed * (p2.speed >= 0 ? 1 : -1);
-            if (keys['arrowright']) p2.angle -= p2.rotSpeed * (p2.speed >= 0 ? 1 : -1);
+            // --- SPIELER 2 ENGINE LOGIK (Pfeiltasten) ---
+            if (keyMap['arrowup']) bike2.speed = Math.min(bike2.maxSpeed, bike2.speed + bike2.accel);
+            if (keyMap['arrowdown']) bike2.speed = Math.max(-bike2.maxSpeed/3, bike2.speed - bike2.accel);
+            if (keyMap['arrowleft']) bike2.angle += 0.035 * (bike2.speed >= 0 ? 1 : -1);
+            if (keyMap['arrowright']) bike2.angle -= 0.035 * (bike2.speed >= 0 ? 1 : -1);
 
-            // Reibung anwenden (Ausrollen lassen)
-            p1.speed *= p1.friction;
-            p2.speed *= p2.friction;
+            // Reibungssimulation (Rollen lassen)
+            bike1.speed *= bike1.friction;
+            bike2.speed *= bike2.friction;
 
-            // Positionen updaten anhand des Winkels (Trigonometrie für echte 360° Open World)
-            p1Mesh.position.x += Math.sin(p1.angle) * p1.speed;
-            p1Mesh.position.z += Math.cos(p1.angle) * p1.speed;
-            p1Mesh.rotation.z = p1.angle; // Modell in Fahrtrichtung drehen
+            // P1 Positions- & Rotations-Update
+            player1.mesh.position.x += Math.sin(bike1.angle) * bike1.speed;
+            player1.mesh.position.z += Math.cos(bike1.angle) * bike1.speed;
+            player1.mesh.rotation.y = bike1.angle + Math.PI/2; // Ausrichtung anpassen
 
-            p2Mesh.position.x += Math.sin(p2.angle) * p2.speed;
-            p2Mesh.position.z += Math.cos(p2.angle) * p2.speed;
-            p2Mesh.rotation.z = p2.angle;
+            // P2 Positions- & Rotations-Update
+            player2.mesh.position.x += Math.sin(bike2.angle) * bike2.speed;
+            player2.mesh.position.z += Math.cos(bike2.angle) * bike2.speed;
+            player2.mesh.rotation.y = bike2.angle + Math.PI/2;
 
-            // Ziel-Tor Animation (Drehen und Pulsieren)
-            targetMesh.rotation.y += 0.02;
-            targetMesh.rotation.x += 0.01;
+            // Laufrad-Rotationen animieren (Sieht aus als ob sie fahren!)
+            player1.frontWheel.rotation.z -= bike1.speed * 0.8;
+            player1.backWheel.rotation.z -= bike1.speed * 0.8;
+            player2.frontWheel.rotation.z -= bike2.speed * 0.8;
+            player2.backWheel.rotation.z -= bike2.speed * 0.8;
 
-            // --- KOLLISIONS-CHECK ZIEL ---
-            const distP1 = p1Mesh.position.distanceTo(targetMesh.position);
-            const distP2 = p2Mesh.position.position ? p2Mesh.position.distanceTo(targetMesh.position) : p2Mesh.position.distanceTo(targetMesh.position);
-            
-            if(distP1 < 5) {
-                relocateTarget();
-                document.getElementById('target-info').innerHTML = "💥 PUNKT FÜR SPIELER 1 (ROT)! Neues Tor gespawnt!";
-                document.getElementById('target-info').style.color = "#ef4444";
-            } else if(distP2 < 5) {
-                relocateTarget();
-                document.getElementById('target-info').innerHTML = "💥 PUNKT FÜR SPIELER 2 (BLAU)! Neues Tor gespawnt!";
-                document.getElementById('target-info').style.color = "#3b82f6";
-            }
+            // HUD Tacho-Werte in Echtzeit manipulieren
+            document.getElementById('sp1').innerText = Math.abs(Math.round(bike1.speed * 38)) + " km/h";
+            document.getElementById('sp2').innerText = Math.abs(Math.round(bike2.speed * 38)) + " km/h";
 
-            // HUD Tacho updaten
-            document.getElementById('sp1').innerText = Math.abs(Math.round(p1.speed * 40)) + " km/h";
-            document.getElementById('sp2').innerText = Math.abs(Math.round(p2.speed * 40)) + " km/h";
+            // Dynamischer Kamera-Fokus (Folgt dem Mittelpunkt beider Racer)
+            const mx = (player1.mesh.position.x + player2.mesh.position.x) / 2;
+            const mz = (player1.mesh.position.z + player2.mesh.position.z) / 2;
+            const distance = player1.mesh.position.distanceTo(player2.mesh.position);
 
-            // Kamera positioniert sich dynamisch über dem Geschehen, um beide im Blick zu behalten
-            const midX = (p1Mesh.position.x + p2Mesh.position.x) / 2;
-            const midZ = (p1Mesh.position.z + p2Mesh.position.z) / 2;
-            const distBetween = p1Mesh.position.distanceTo(p2Mesh.position);
-            
-            camera.position.x = midX;
-            camera.position.z = midZ + Math.max(40, distBetween * 1.2);
-            camera.position.y = Math.max(30, distBetween * 0.8);
-            camera.lookAt(new THREE.Vector3(midX, 0, midZ));
+            camera.position.x = mx;
+            camera.position.z = mz + Math.max(35, distance * 1.1);
+            camera.position.y = Math.max(25, distance * 0.7);
+            camera.lookAt(new THREE.Vector3(mx, 1, mz));
 
             renderer.render(scene, camera);
         }
 
-        // Engine starten
         animate();
 
-        // Responsive Resizing
+        // Fenster-Resizing absichern
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight * 0.75);
+            renderer.setSize(window.innerWidth, window.innerHeight * 0.78);
         });
     </script>
 </body>
 </html>
 """
 
-# --- 3. EXECUTE INTEGRATION ---
-# Hier übergeben wir den JavaScript-Code an den Streamlit-HTML-iFrame
-st.components.v1.html(three_js_code, height=650, scrolling=False)
+# --- 3. INJECT HTML TO STREAMLIT ---
+st.components.v1.html(tour_de_france_code, height=680, scrolling=False)
 
-# --- 4. SIDEBAR CONTROLS ---
+# --- 4. SIDEBAR MECHANICS ---
 st.sidebar.markdown("""
-### 🛠️ Open World Handbuch:
-Setz dich mit deinem Kumpel oder Mitschüler vor den Bildschirm. 
-Einer greift sich die linke Seite der Tastatur, der andere die rechte!
+### 🏁 Rennleiter-Zentrale:
+Willkommen bei der Königsetappe! Ihr fahrt auf einem originalgetreuen Asphaltband durch die Alpen.
 
-**🔴 SPIELER 1 (Aero-Bike):**
-* `W` = Beschleunigen
-* `S` = Bremsen / Rückwärts
-* `A` / `D` = 360° Lenken
+**🚨 Wichtig bei Steuerungshacks:**
+Weil Webbrowser iFrames absichern, müsst ihr **einmal mitten in das 3D-Spielfeld klicken**, damit die Tastaturbefehle direkt an die Rennräder gesendet werden.
 
-**🔵 SPIELER 2 (Gravel-Bike):**
-* `Pfeiltaste Hoch` = Beschleunigen
-* `Pfeiltaste Runter` = Bremsen
-* `Pfeiltaste Links/Rechts` = 360° Lenken
+**🔴 Spieler 1 (Maillot Rouge):**
+* `W` / `S` = Vorwärts / Rückwärts
+* `A` / `D` = Lenken (360°)
 
-*Tipp: Jagt das grüne Leuchttor am Horizont! Wer es rammt, kriegt den Punkt!*
+**🔵 Spieler 2 (Maillot Bleu):**
+* `Pfeiltaste Hoch / Runter` = Vorwärts / Rückwärts
+* `Pfeiltaste Links / Rechts` = Lenken (360°)
 """)
