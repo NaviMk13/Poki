@@ -1,286 +1,243 @@
 import streamlit as st
-import random
 
-# --- 1. SETTING UP THE GAME INTERFACE ---
-st.set_page_config(page_title="VELO-DASH 3D Racing", layout="wide", page_icon="🚴")
+# --- 1. STREAMLIT PAGE SETUP ---
+st.set_page_config(page_title="VELO-DASH 3D Open World Simulator", layout="wide", page_icon="🚴‍♂️")
 
 st.markdown("""
     <style>
     .stApp {
-        background-color: #0f172a;
+        background-color: #090d16;
         color: #ffffff;
+    }
+    iframe {
+        border: 4px solid #00f0ff !important;
+        border-radius: 15px;
+        box-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
     }
     h1 {
         font-family: 'Impact', sans-serif;
-        color: #00f0ff !important; /* Cyberpunk Cyan */
-        text-shadow: 2px 2px 0px #3b82f6;
+        color: #00f0ff !important;
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
         text-align: center;
         text-transform: uppercase;
-        letter-spacing: 2px;
-    }
-    .screen-3d {
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 10px;
-        letter-spacing: 4px;
-        background-color: #000000;
-        color: #00f0ff;
-        padding: 20px;
-        border: 4px solid #3b82f6;
-        border-radius: 10px;
-        text-align: center;
-        white-space: pre;
-    }
-    .racer-card {
-        background: rgba(30, 41, 59, 0.9);
-        border: 3px solid #3b4cca;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-    }
-    .track-info {
-        background-color: #1e293b;
-        border-left: 5px solid #facc15;
-        padding: 12px;
-        border-radius: 6px;
-        font-family: 'Arial', sans-serif;
-        margin-top: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚴 VELO-DASH 3D: THE TRACK DUEL")
+st.title("🚴‍♂️ VELO-DASH 3D: REALTIME OPEN-WORLD SIMULATOR")
+st.write("<p style='text-align:center; color:#94a3b8;'>Echte 3D Game Engine in Streamlit eingebettet. Perfekt für das Schul-WLAN!</p>", unsafe_allow_html=True)
 
-# --- 2. INITIALIZE GAME STATE ---
-if 'race_initialized' not in st.session_state:
-    st.session_state.track_length = 500  # Gesamte Distanz in Metern
-    st.session_state.p1_dist = 0
-    st.session_state.p2_dist = 0
-    st.session_state.p1_energy = 100
-    st.session_state.p2_energy = 100
-    st.session_state.p1_speed = 0
-    st.session_state.p2_speed = 0
-    st.session_state.aktiver_racer = 1  # Spieler 1 beginnt
-    st.session_state.race_log = "Das grüne Licht leuchtet! Klickt in die Pedale!"
-    st.session_state.race_over = False
-    st.session_state.next_curve = random.randint(80, 150)
-    st.session_state.race_initialized = True
+# --- 2. THE EMBEDDED 3D ENGINE (HTML / JAVASCRIPT / THREE.JS) ---
+# Dieser riesige Block wird als flüssige WebGL-App direkt im Browser gerendert.
+three_js_code = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #090d16; font-family: monospace; }
+        #canvas-container { width: 100vw; height: 75vh; }
+        #hud {
+            position: absolute; top: 15px; left: 15px;
+            color: #00f0ff; background: rgba(11, 15, 25, 0.85);
+            padding: 15px; border-radius: 10px; border: 2px solid #00f0ff;
+            pointer-events: none; font-size: 14px; box-shadow: 0 0 15px rgba(0,240,255,0.2);
+        }
+        .player-stat { margin: 5px 0; font-size: 16px; font-weight: bold; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
 
-# Reset-Button in der Sidebar
-if st.sidebar.button("🔄 Rennen neu starten"):
-    st.session_state.race_initialized = False
-    st.rerun()
+    <div id="hud">
+        <h2 style="margin: 0 0 10px 0; color: #facc15;">🏎️ 3D MULTIPLAYER DUEL</h2>
+        <div class="player-stat" style="color: #ef4444;">🔴 SPIELER 1 (Aero-Bike): <span id="sp1">0 km/h</span><br><small>Steuerung: W, A, S, D</small></div>
+        <div class="player-stat" style="color: #3b82f6;">🔵 SPIELER 2 (Gravel-Bike): <span id="sp2">0 km/h</span><br><small>Steuerung: Pfeiltasten</small></div>
+        <hr style="border-color: #00f0ff;">
+        <div id="target-info" style="color: #22c55e; font-weight: bold;">Nächstes Ziel-Tor aktiv! Wer erreicht es zuerst?</div>
+    </div>
 
-# --- 3. 3D ROAD RAYCASTING RENDERER (DIE BIKE ENGINE) ---
-def render_race_3d(p1_d, p2_d, next_c, aktiver):
-    # Berechnung, wie weit die nächste Kurve entfernt ist
-    aktuelle_dist = p1_d if aktiver == 1 else p2_d
-    dist_to_curve = next_c - aktuelle_dist
-    
-    # Wer führt gerade?
-    if p1_d > p2_d:
-        lead_text = "P1 LEADS"
-    elif p2_d > p1_d:
-        lead_text = "P2 LEADS"
-    else:
-        lead_text = "NECK-NECK"
+    <div id="canvas-container"></div>
 
-    # Generiere 3D-Straßenperspektive je nach Kurven-Entfernung
-    if dist_to_curve < 15:
-        # Scharfe Kurve voraus!
-        view = (
-            f"=== {lead_text} === DIST: {int(aktuelle_dist)}m ===\n"
-            "         / / / /                   \n"
-            "        / / / /                    \n"
-            "       / / / /                     \n"
-            "      / / / /                      \n"
-            "     / / / /  <<<< SHARP CURVE!    \n"
-            "    / / / /                        \n"
-            "   / / / /                         \n"
-            "===================================\n"
-        )
-    elif dist_to_curve < 50:
-        # Leichte Kurve am Horizont
-        view = (
-            f"=== {lead_text} === DIST: {int(aktuelle_dist)}m ===\n"
-            "             /   /                 \n"
-            "            /   /                  \n"
-            "           /   /                   \n"
-            "          /   /                    \n"
-            "         /   /                     \n"
-            "        /   /                      \n"
-            "       /   /                       \n"
-            "===================================\n"
-        )
-    else:
-        # Lange, gerade Aero-Gerade
-        view = (
-            f"=== {lead_text} === DIST: {int(aktuelle_dist)}m ===\n"
-            "             |   |                 \n"
-            "             |   |                 \n"
-            "            /     \\                \n"
-            "           /       \\               \n"
-            "          /   AERO  \\              \n"
-            "         /  STRAIGHT \\             \n"
-            "        /             \\            \n"
-            "===================================\n"
-        )
-    return view
+    <script>
+        // --- 1. ENGINE BASIC SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a); // Stylischer Nachthimmel
+        scene.fog = new THREE.FogExp2(0x0f172a, 0.015); // Nebel für Open-World-Tiefe
 
-# --- 4. RENN-LOGIK FÜR EINEN ZUG ---
-def execute_race_turn(action):
-    # Variablen holen
-    if st.session_state.aktiver_racer == 1:
-        current_dist = st.session_state.p1_dist
-        current_energy = st.session_state.p1_energy
-        other_dist = st.session_state.p2_dist
-        racer_name = "Spieler 1 (Rot)"
-    else:
-        current_dist = st.session_state.p2_dist
-        current_energy = st.session_state.p2_energy
-        other_dist = st.session_state.p1_dist
-        racer_name = "Spieler 2 (Blau)"
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight * 0.75);
+        container.appendChild(renderer.domElement);
 
-    # Windschatten-Bonus berechnen (Wenn man dicht dahinter fährt)
-    in_draft = False
-    if 0 < (other_dist - current_dist) <= 15:
-        in_draft = True
+        // Lichteffekte
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0x00f0ff, 1);
+        dirLight.position.set(50, 100, 50);
+        scene.add(dirLight);
 
-    # Checken, ob eine Kurve da ist
-    dist_to_curve = st.session_state.next_curve - current_dist
-    is_curving = dist_to_curve < 15
+        // --- 2. OPEN WORLD GEOMETRIE (Die Map) ---
+        // Der Rasen/Asphalt
+        const floorGeo = new THREE.PlaneGeometry(1000, 1000);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
 
-    # Aktionen auswerten
-    speed = 0
-    energy_cost = 0
-    log_msg = ""
+        // Ein Gitternetz auf dem Boden für die Geschwindigkeits-Illusion
+        const grid = new THREE.GridHelper(1000, 100, 0x00f0ff, 0x334155);
+        grid.position.y = 0.01;
+        scene.add(grid);
 
-    if action == "AERO":
-        # Energiesparend auf der Geraden, katastrophal in der Kurve
-        if is_curving:
-            speed = random.randint(5, 12)
-            energy_cost = 5
-            log_msg = f"⚠️ {racer_name} geht in Aero-Haltung, rutscht aber fast aus der Kurve!"
-        else:
-            speed = random.randint(22, 30)
-            energy_cost = 8 if not in_draft else 3  # Windschatten spart Energie!
-            log_msg = f"💨 {racer_name} macht sich flach! Perfekte Aerodynamik."
+        // Random Hindernisse & Gebäude in der Open World spawnen
+        const buildings = [];
+        for(let i=0; i<60; i++) {
+            const h = Math.random() * 30 + 10;
+            const bGeo = new THREE.BoxGeometry(10, h, 10);
+            const bMat = new THREE.MeshStandardMaterial({ color: 0x334155, wireframe: Math.random() > 0.5 });
+            const b = new THREE.Mesh(bGeo, bMat);
+            b.position.set((Math.random()-0.5)*400, h/2, (Math.random()-0.5)*400);
+            scene.add(b);
+        }
 
-    elif action == "SPRINT":
-        # Extrem schnell, verbraucht massig Energie
-        if current_energy >= 20:
-            speed = random.randint(35, 48)
-            energy_cost = 22
-            log_msg = f"🔥 {racer_name} geht in den Wiegetritt und sprintet brachial!"
-        else:
-            speed = random.randint(10, 15)
-            energy_cost = 5
-            log_msg = f"🥵 {racer_name} wollte sprinten, hat aber keine Körner mehr!"
+        // --- 3. DIE FAHRER (3D-Objekte) ---
+        // Spieler 1 (Rot)
+        const p1Geo = new THREE.ConeGeometry(1.5, 4, 4);
+        const p1Mat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+        const p1Mesh = new THREE.Mesh(p1Geo, p1Mat);
+        p1Mesh.rotation.x = Math.PI / 2; // Liegend wie ein Pfeil/Fahrrad
+        p1Mesh.position.set(-10, 2, 0);
+        scene.add(p1Mesh);
 
-    elif action == "ROLLEN":
-        # Regeneriert Ausdauer, wenig Speed
-        speed = random.randint(12, 18)
-        energy_cost = -15  # Lädt Energie auf
-        log_msg = f"🔋 {racer_name} nimmt die Beine hoch und regeneriert im Windschatten/Rollen."
+        // Spieler 2 (Blau)
+        const p2Geo = new THREE.ConeGeometry(1.5, 4, 4);
+        const p2Mat = new THREE.MeshStandardMaterial({ color: 0x3b82f6 });
+        const p2Mesh = new THREE.Mesh(p2Geo, p2Mat);
+        p2Mesh.rotation.x = Math.PI / 2;
+        p2Mesh.position.set(10, 2, 0);
+        scene.add(p2Mesh);
 
-    # Werte anwenden & begrenzen
-    neue_energy = max(0, min(100, current_energy - energy_cost))
-    neue_dist = current_dist + speed
+        // Das Ziel-Tor (Leuchtende grüne Kugel)
+        const targetGeo = new THREE.SphereGeometry(4, 16, 16);
+        const targetMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, wireframe: true });
+        const targetMesh = new THREE.Mesh(targetGeo, targetMat);
+        function relocateTarget() {
+            targetMesh.position.set((Math.random()-0.5)*200, 4, (Math.random()-0.5)*200);
+        }
+        relocateTarget();
+        scene.add(targetMesh);
 
-    if in_draft and action != "ROLLEN":
-        log_msg += " (inkl. Windschatten-Bonus! 🚴💨)"
+        // --- 4. ENGINE STEUERUNGS-LOGIK ---
+        const keys = {};
+        window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
-    # Zurückschreiben in den State
-    if st.session_state.aktiver_racer == 1:
-        st.session_state.p1_dist = neue_dist
-        st.session_state.p1_energy = neue_energy
-        st.session_state.p1_speed = speed
-    else:
-        st.session_state.p2_dist = neue_dist
-        st.session_state.p2_energy = neue_energy
-        st.session_state.p2_speed = speed
+        // Physik-Variablen für beide Fahrer
+        const p1 = { speed: 0, maxSpeed: 1.8, accel: 0.04, friction: 0.97, angle: 0, rotSpeed: 0.04 };
+        const p2 = { speed: 0, maxSpeed: 1.8, accel: 0.04, friction: 0.97, angle: 0, rotSpeed: 0.04 };
 
-    st.session_state.race_log = log_msg
+        // Kamera-Modus Variablen
+        camera.position.set(0, 45, 90);
 
-    # Neue Kurve generieren, wenn die alte passiert wurde
-    if neue_dist >= st.session_state.next_curve:
-        st.session_state.next_curve += random.randint(100, 180)
+        // --- 5. MAIN GAME LOOP (60 FPS Echtzeit) ---
+        function animate() {
+            requestAnimationFrame(animate);
 
-    # Check Ziellinie
-    if st.session_state.p1_dist >= st.session_state.track_length or st.session_state.p2_dist >= st.session_state.track_length:
-        st.session_state.race_over = True
-        return
+            // --- STEUERUNG SPIELER 1 (WASD) ---
+            if (keys['w']) p1.speed = Math.min(p1.maxSpeed, p1.speed + p1.accel);
+            if (keys['s']) p1.speed = Math.max(-p1.maxSpeed/2, p1.speed - p1.accel);
+            if (keys['a']) p1.angle += p1.rotSpeed * (p1.speed >= 0 ? 1 : -1);
+            if (keys['d']) p1.angle -= p1.rotSpeed * (p1.speed >= 0 ? 1 : -1);
 
-    # Spieler wechseln
-    st.session_state.aktiver_racer = 2 if st.session_state.aktiver_racer == 1 else 1
+            // --- STEUERUNG SPIELER 2 (Pfeiltasten) ---
+            if (keys['arrowup']) p2.speed = Math.min(p2.maxSpeed, p2.speed + p2.accel);
+            if (keys['arrowdown']) p2.speed = Math.max(-p2.maxSpeed/2, p2.speed - p2.accel);
+            if (keys['arrowleft']) p2.angle += p2.rotSpeed * (p2.speed >= 0 ? 1 : -1);
+            if (keys['arrowright']) p2.angle -= p2.rotSpeed * (p2.speed >= 0 ? 1 : -1);
 
-# --- 5. INTERFACE RENDERING ---
-col_view, col_stats = st.columns([2, 1.2])
+            // Reibung anwenden (Ausrollen lassen)
+            p1.speed *= p1.friction;
+            p2.speed *= p2.friction;
 
-with col_view:
-    st.subheader("📺 Live-Sicht (3D-Strecken-Engine):")
-    view_data = render_race_3d(st.session_state.p1_dist, st.session_state.p2_dist, st.session_state.next_curve, st.session_state.aktiver_racer)
-    st.markdown(f"<div class='screen-3d'>{view_data}</div>", unsafe_allow_html=True)
-    
-    # Aktueller Ticker
-    st.markdown(f"<div class='track-info'>🎙️ **Rennleitung:** {st.session_state.race_log}</div>", unsafe_allow_html=True)
+            // Positionen updaten anhand des Winkels (Trigonometrie für echte 360° Open World)
+            p1Mesh.position.x += Math.sin(p1.angle) * p1.speed;
+            p1Mesh.position.z += Math.cos(p1.angle) * p1.speed;
+            p1Mesh.rotation.z = p1.angle; // Modell in Fahrtrichtung drehen
 
-with col_stats:
-    st.subheader("🏁 Renn-Statistiken")
-    
-    # Fortschrittsbalken bis zum Ziel (500m)
-    p1_progress = min(1.0, st.session_state.p1_dist / st.session_state.track_length)
-    p2_progress = min(1.0, st.session_state.p2_dist / st.session_state.track_length)
-    
-    st.write(f"🔴 **Spieler 1:** {int(st.session_state.p1_dist)}m / {st.session_state.track_length}m (Speed: {st.session_state.p1_speed} km/h)")
-    st.progress(p1_progress)
-    st.caption(f"🔋 Ausdauer (Energie): {st.session_state.p1_energy}%")
-    
-    st.write("")
-    st.write(f"🔵 **Spieler 2:** {int(st.session_state.p2_dist)}m / {st.session_state.track_length}m (Speed: {st.session_state.p2_speed} km/h)")
-    st.progress(p2_progress)
-    st.caption(f"🔋 Ausdauer (Energie): {st.session_state.p2_energy}%")
+            p2Mesh.position.x += Math.sin(p2.angle) * p2.speed;
+            p2Mesh.position.z += Math.cos(p2.angle) * p2.speed;
+            p2Mesh.rotation.z = p2.angle;
 
-st.write("---")
+            // Ziel-Tor Animation (Drehen und Pulsieren)
+            targetMesh.rotation.y += 0.02;
+            targetMesh.rotation.x += 0.01;
 
-# --- 6. GAME CONTROLS (WER IST DRAN?) ---
-if not st.session_state.race_over:
-    aktueller_spieler_name = "🔴 SPIELER 1 (Rot)" if st.session_state.aktiver_racer == 1 else "🔵 SPIELER 2 (Blau)"
-    border_clr = "#ef4444" if st.session_state.aktiver_racer == 1 else "#3b82f6"
-    
-    st.markdown(f"""
-        <div class='racer-card' style='border-color: {border_clr};'>
-            <h2>DU BIST DRAN: {aktueller_spieler_name}</h2>
-            <p>Wähle deine Taktik für das nächste Streckenstück!</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.write("")
-    col_act1, col_act2, col_act3 = st.columns(3)
-    
-    with col_act1:
-        if st.button("💨 Aero-Haltung (Guter Speed, anfällig in Kurven)", use_container_width=True):
-            execute_race_turn("Aero")
-            st.rerun()
+            // --- KOLLISIONS-CHECK ZIEL ---
+            const distP1 = p1Mesh.position.distanceTo(targetMesh.position);
+            const distP2 = p2Mesh.position.position ? p2Mesh.position.distanceTo(targetMesh.position) : p2Mesh.position.distanceTo(targetMesh.position);
             
-    with col_act2:
-        if st.button("🔥 Sprint / Wiegetritt (Maximaler Speed, kostet viel Ausdauer)", use_container_width=True):
-            execute_race_turn("Sprint")
-            st.rerun()
-            
-    with col_act3:
-        if st.button("🔋 Beine hoch / Rollen (Regeneriert +15 Ausdauer, weniger Speed)", use_container_width=True):
-            execute_race_turn("Rollen")
-            st.rerun()
+            if(distP1 < 5) {
+                relocateTarget();
+                document.getElementById('target-info').innerHTML = "💥 PUNKT FÜR SPIELER 1 (ROT)! Neues Tor gespawnt!";
+                document.getElementById('target-info').style.color = "#ef4444";
+            } else if(distP2 < 5) {
+                relocateTarget();
+                document.getElementById('target-info').innerHTML = "💥 PUNKT FÜR SPIELER 2 (BLAU)! Neues Tor gespawnt!";
+                document.getElementById('target-info').style.color = "#3b82f6";
+            }
 
-# --- 7. WINNER CELEBRATION ---
-else:
-    st.balloons()
-    if st.session_state.p1_dist >= st.session_state.track_length and st.session_state.p1_dist >= st.session_state.p2_dist:
-        st.success("🏆 SPIELER 1 GEWINNT DAS 3D-RENNEN! Absoluter Sprint-König! 🥇🔴")
-    else:
-        st.success("🏆 SPIELER 2 GEWINNT DAS 3D-RENNEN! Überragende Taktik auf dem Rad! 🥇🔵")
-        
-    if st.button("🔄 Sofort Revanche fordern! Neues Rennen starten", use_container_width=True):
-        st.session_state.race_initialized = False
-        st.rerun()
+            // HUD Tacho updaten
+            document.getElementById('sp1').innerText = Math.abs(Math.round(p1.speed * 40)) + " km/h";
+            document.getElementById('sp2').innerText = Math.abs(Math.round(p2.speed * 40)) + " km/h";
+
+            // Kamera positioniert sich dynamisch über dem Geschehen, um beide im Blick zu behalten
+            const midX = (p1Mesh.position.x + p2Mesh.position.x) / 2;
+            const midZ = (p1Mesh.position.z + p2Mesh.position.z) / 2;
+            const distBetween = p1Mesh.position.distanceTo(p2Mesh.position);
+            
+            camera.position.x = midX;
+            camera.position.z = midZ + Math.max(40, distBetween * 1.2);
+            camera.position.y = Math.max(30, distBetween * 0.8);
+            camera.lookAt(new THREE.Vector3(midX, 0, midZ));
+
+            renderer.render(scene, camera);
+        }
+
+        // Engine starten
+        animate();
+
+        // Responsive Resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight * 0.75);
+        });
+    </script>
+</body>
+</html>
+"""
+
+# --- 3. EXECUTE INTEGRATION ---
+# Hier übergeben wir den JavaScript-Code an den Streamlit-HTML-iFrame
+st.components.v1.html(three_js_code, height=650, scrolling=False)
+
+# --- 4. SIDEBAR CONTROLS ---
+st.sidebar.markdown("""
+### 🛠️ Open World Handbuch:
+Setz dich mit deinem Kumpel oder Mitschüler vor den Bildschirm. 
+Einer greift sich die linke Seite der Tastatur, der andere die rechte!
+
+**🔴 SPIELER 1 (Aero-Bike):**
+* `W` = Beschleunigen
+* `S` = Bremsen / Rückwärts
+* `A` / `D` = 360° Lenken
+
+**🔵 SPIELER 2 (Gravel-Bike):**
+* `Pfeiltaste Hoch` = Beschleunigen
+* `Pfeiltaste Runter` = Bremsen
+* `Pfeiltaste Links/Rechts` = 360° Lenken
+
+*Tipp: Jagt das grüne Leuchttor am Horizont! Wer es rammt, kriegt den Punkt!*
+""")
