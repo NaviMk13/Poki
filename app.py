@@ -1,223 +1,239 @@
 import streamlit as st
 import random
+import numpy as np
 
-# --- 1. GAME DESIGNS & STYLING ---
-st.set_page_config(page_title="PokeStream Arena", layout="wide", page_icon="🎮")
+# --- 1. SETTING UP THE GAME INTERFACE ---
+st.set_page_config(page_title="PokeStream 3D Open World", layout="wide", page_icon="🌐")
 
 st.markdown("""
     <style>
     .stApp {
-        background: linear-gradient(rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.98)), 
-                    url('https://images.unsplash.com/photo-1613771404724-17d1e83a227c?q=80&w=1920') no-repeat center center fixed;
-        background-size: cover;
-        color: #ffffff !important;
+        background-color: #0f172a;
+        color: #ffffff;
     }
     h1 {
-        font-family: 'Impact', 'Arial Black', sans-serif;
-        text-transform: uppercase;
-        color: #ffcb05 !important; /* Pokémon Gelb */
-        text-shadow: 3px 3px 0px #3b4cca; /* Pokémon Blau Umrandung */
+        font-family: 'Impact', sans-serif;
+        color: #ffcb05 !important;
+        text-shadow: 2px 2px 0px #3b4cca;
         text-align: center;
-        letter-spacing: 2px;
     }
-    .poke-card {
-        background: rgba(30, 41, 59, 0.85);
-        border: 3px solid #3b4cca;
-        border-radius: 15px;
+    .screen-3d {
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 10px;
+        letter-spacing: 4px;
+        background-color: #000000;
+        color: #00ff00;
+        padding: 20px;
+        border: 4px solid #3b4cca;
+        border-radius: 10px;
+        text-align: center;
+        white-space: pre;
+    }
+    .battle-box {
+        background: rgba(30, 41, 59, 0.9);
+        border: 3px solid #ef4444;
+        border-radius: 12px;
         padding: 20px;
         text-align: center;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
-    }
-    .hp-bar {
-        background-color: #475569;
-        border-radius: 10px;
-        padding: 3px;
-        margin-top: 10px;
-    }
-    .hp-fill {
-        height: 15px;
-        border-radius: 8px;
-        transition: width 0.5s ease-in-out;
-    }
-    .battle-log {
-        background-color: #0f172a;
-        border-left: 5px solid #ffcb05;
-        padding: 12px;
-        border-radius: 6px;
-        font-family: 'Courier New', monospace;
-        margin-top: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🎮 POKESTREAM ARENA 1VS1")
+st.title("🌐 POKESTREAM 3D: OPEN WORLD")
 
-# --- 2. DATA POOL (DIE POKÉMON & ATTACKEN) ---
-POKEMON_POOL = [
-    {"name": "Glurak", "type": "Feuer"},
-    {"name": "Turtok", "type": "Wasser"},
-    {"name": "Bisaflor", "type": "Pflanze"},
-    {"name": "Pikachu", "type": "Elektro"},
-    {"name": "Gengar", "type": "Geist"},
-    {"name": "Mewtu", "type": "Psycho"},
-    {"name": "Lucario", "type": "Kampf"},
-    {"name": "Nachtara", "type": "Unlicht"}
+# --- 2. THE 3D ENGINE & MAP CONFIGURATION ---
+# 1 = Wand, 0 = Offener Weg, P = Möglicher Pokémon-Spawn
+WORLD_MAP = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,0,1,0,1,1,1,1,1,0,1,0,1],
+    [1,0,1,0,0,0,1,0,0,0,1,0,1,0,1],
+    [1,0,1,1,1,0,1,0,0,0,1,0,1,0,1],
+    [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+    [1,1,1,0,1,1,1,1,1,1,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
 ]
 
-ATTACKEN_POOL = [
-    {"name": "Donnerblitz", "min": 15, "max": 25, "chance": 95, "type": "Normal"},
-    {"name": "Flammenwurf", "min": 18, "max": 22, "chance": 90, "type": "Normal"},
-    {"name": "Hyperstrahl", "min": 30, "max": 50, "chance": 55, "type": "Risiko"},
-    {"name": "Erdbeben", "min": 20, "max": 28, "chance": 85, "type": "Normal"},
-    {"name": "Kreuzhieb", "min": 25, "max": 35, "chance": 70, "type": "Risiko"},
-    {"name": "Genesung", "min": 15, "max": 25, "chance": 100, "type": "Heilung"},
-    {"name": "Trank werfen", "min": 12, "max": 20, "chance": 100, "type": "Heilung"}
-]
+POKEMON_POOL = ["Pikachu", "Glurak", "Turtok", "Gengar", "Mewtu"]
 
-# --- 3. GAME STATE MANAGEMENT ---
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = False
+# --- 3. INITIALIZE GAME STATE ---
+if 'player_x' not in st.session_state:
+    st.session_state.player_x = 1
+    st.session_state.player_y = 1
+    st.session_state.player_dir = 0 # 0: Norden, 1: Osten, 2: Süden, 3: Westen
+    st.session_state.game_state = "EXPLORE" # EXPLORE oder BATTLE
+    st.session_state.current_enemy = ""
+    st.session_state.enemy_hp = 100
+    st.session_state.player_hp = 100
+    st.session_state.log = "Du bist in der 3D-Welt erwacht! Erkunde das Labyrinth."
 
-def start_neues_spiel():
-    p1 = random.choice(POKEMON_POOL)
-    p2 = random.choice(POKEMON_POOL)
-    while p2["name"] == p1["name"]: # Verhindern, dass es zweimal exakt dasselbe ist
-        p2 = random.choice(POKEMON_POOL)
-        
-    st.session_state.p1_name = p1["name"]
-    st.session_state.p1_max_hp = random.randint(90, 120)
-    st.session_state.p1_hp = st.session_state.p1_max_hp
-    st.session_state.p1_attacks = random.sample(ATTACKEN_POOL, 3)
+# --- 4. 3D RAYCASTING RENDERER (DIE ENGINE) ---
+def render_3d_view(map_data, px, py, p_dir):
+    # Wir simulieren ein einfaches Sichtfeld vor dem Spieler
+    # Richtungsvektoren für die Kamerasicht
+    dirs = [(-1, 0), (0, 1), (1, 0), (0, -1)] # N, O, S, W
+    dx, dy = dirs[p_dir]
     
-    st.session_state.p2_name = p2["name"]
-    st.session_state.p2_max_hp = random.randint(90, 120)
-    st.session_state.p2_hp = st.session_state.p2_max_hp
-    st.session_state.p2_attacks = random.sample(ATTACKEN_POOL, 3)
-    
-    st.session_state.aktiver_spieler = 1
-    st.session_state.log = "Das Match hat begonnen! Wer holt sich den Sieg?"
-    st.session_state.game_over = False
-    st.session_state.initialized = True
-
-# Buttons für Spiel-Modus in der Sidebar
-st.sidebar.header("🕹️ Menü")
-bot_modus = st.sidebar.checkbox("🤖 Gegen KI spielen (Singleplayer)", value=False)
-
-if st.sidebar.button("🎲 NEUES RANDOM MATCH STARTEN") or not st.session_state.initialized:
-    start_neues_spiel()
-
-# --- 4. SPIEL-LOGIK FÜR EINEN ZUG ---
-def execute_turn(attack, angreifer, verteidiger_name):
-    if random.randint(1, 100) <= attack["chance"]:
-        wert = random.randint(attack["min"], attack["max"])
-        if attack["type"] == "Heilung":
-            if angreifer == 1:
-                st.session_state.p1_hp = min(st.session_state.p1_max_hp, st.session_state.p1_hp + wert)
-                st.session_state.log = f"🟢 {st.session_state.p1_name} setzt {attack['name']} ein und heilt sich um {wert} KP!"
-            else:
-                st.session_state.p2_hp = min(st.session_state.p2_max_hp, st.session_state.p2_hp + wert)
-                st.session_state.log = f"🟢 {st.session_state.p2_name} setzt {attack['name']} ein und heilt sich um {wert} KP!"
-        else:
-            if angreifer == 1:
-                st.session_state.p2_hp = max(0, st.session_state.p2_hp - wert)
-                st.session_state.log = f"💥 {st.session_state.p1_name} setzt {attack['name']} ein und trifft {verteidiger_name} für {wert} Schaden!"
-            else:
-                st.session_state.p1_hp = max(0, st.session_state.p1_hp - wert)
-                st.session_state.log = f"💥 {st.session_state.p2_name} setzt {attack['name']} ein und trifft {verteidiger_name} für {wert} Schaden!"
+    # Checken, wie weit die Wand in Blickrichtung entfernt ist
+    distance = 0
+    for i in range(1, 6):
+        check_x = px + dx * i
+        check_y = py + dy * i
+        if map_data[check_x][check_y] == 1:
+            distance = i
+            break
+            
+    # Generiere eine krasse Retro-3D-Ansicht als Text-Art basierend auf der Entfernung
+    if distance == 1:
+        view = "###########################\n" * 8
+    elif distance == 2:
+        view = (
+            "###########################\n"
+            "##                       ##\n"
+            "##  ###################  ##\n"
+            "##  ###################  ##\n"
+            "##  ###################  ##\n"
+            "##  ###################  ##\n"
+            "##                       ##\n"
+            "###########################\n"
+        )
+    elif distance == 3:
+        view = (
+            "###########################\n"
+            "##                       ##\n"
+            "##   ||#############||   ##\n"
+            "##   ||             ||   ##\n"
+            "##   ||   #######   ||   ##\n"
+            "##   ||             ||   ##\n"
+            "##   ||#############||   ##\n"
+            "###########################\n"
+        )
     else:
-        name = st.session_state.p1_name if angreifer == 1 else st.session_state.p2_name
-        st.session_state.log = f"💨 Oh nein! Die Attacke {attack['name']} von {name} ging daneben!"
+        view = (
+            "##:::::::::::::::::::::::##\n"
+            "##   ||:::::::::::::::||   ##\n"
+            "##   ||   |       |   ||   ##\n"
+            "##   ||   |   .   |   ||   ##\n"
+            "##   ||   |       |   ||   ##\n"
+            "##   ||:::::::::::::::||   ##\n"
+            "##:::::::::::::::::::::::##\n"
+        )
+    return view
 
-    # Check ob jemand besiegt ist
-    if st.session_state.p1_hp <= 0 or st.session_state.p2_hp <= 0:
-        st.session_state.game_over = True
-        return
-
-    # Spieler wechseln
-    if not st.session_state.game_over:
-        if bot_modus and angreifer == 1:
-            # KI führt direkt ihren Zug aus
-            st.session_state.aktiver_spieler = 2
-            ki_attack = random.choice(st.session_state.p2_attacks)
-            execute_turn(ki_attack, 2, st.session_state.p1_name)
-            st.session_state.aktiver_spieler = 1
-        else:
-            st.session_state.aktiver_spieler = 2 if angreifer == 1 else 1
-
-# --- 5. INTERFACE RENDERING ---
-col_p1, col_space, col_p2 = st.columns([2, 0.5, 2])
-
-# SPIELER 1 CARD
-with col_p1:
-    p1_pct = int((st.session_state.p1_hp / st.session_state.p1_max_hp) * 100)
-    p1_color = "#22c55e" if p1_pct > 40 else ("#f59e0b" if p1_pct > 15 else "#ef4444")
-    border_color = "#ef4444" if st.session_state.aktiver_spieler == 1 and not st.session_state.game_over else "#3b4cca"
+# --- 5. STEUERUNG LOGIK ---
+def move_player(action):
+    # Richtungs-Arrays
+    dirs = [(-1, 0), (0, 1), (1, 0), (0, -1)] # N, O, S, W
     
-    st.markdown(f"""
-        <div class='poke-card' style='border-color: {border_color};'>
-            <h2 style='margin:0; color:#ffcb05 !important;'>🔴 Spieler 1</h2>
-            <h1 style='font-size:32px; margin:5px 0;'>{st.session_state.p1_name}</h1>
-            <div style='text-align:right; font-weight:bold;'>KP: {st.session_state.p1_hp} / {st.session_state.p1_max_hp}</div>
-            <div class='hp-bar'>
-                <div class='hp-fill' style='width: {p1_pct}%; background-color: {p1_color};'></div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.write("")
-    # Angriffs-Buttons für Spieler 1
-    if st.session_state.aktiver_spieler == 1 and not st.session_state.game_over:
-        st.write("⚔️ WÄHLE DEINE ATTACKE:")
-        for atk in st.session_state.p1_attacks:
-            btn_label = f"{atk['name']} ({atk['type']} | Treffer: {atk['chance']}%)"
-            if st.button(btn_label, key=f"p1_{atk['name']}", use_container_width=True):
-                execute_turn(atk, 1, st.session_state.p2_name)
-                st.rerun()
-    elif not st.session_state.game_over:
-        st.info("Warte auf Spieler 2...")
-
-# SPIELER 2 CARD
-with col_p2:
-    p2_pct = int((st.session_state.p2_hp / st.session_state.p2_max_hp) * 100)
-    p2_color = "#22c55e" if p2_pct > 40 else ("#f59e0b" if p2_pct > 15 else "#ef4444")
-    border_color = "#3b82f6" if st.session_state.aktiver_spieler == 2 and not st.session_state.game_over else "#3b4cca"
-    
-    p2_title = "🤖 KI-Gegner" if bot_modus else "🔵 Spieler 2"
-    
-    st.markdown(f"""
-        <div class='poke-card' style='border-color: {border_color};'>
-            <h2 style='margin:0; color:#ffcb05 !important;'>{p2_title}</h2>
-            <h1 style='font-size:32px; margin:5px 0;'>{st.session_state.p2_name}</h1>
-            <div style='text-align:right; font-weight:bold;'>KP: {st.session_state.p2_hp} / {st.session_state.p2_max_hp}</div>
-            <div class='hp-bar'>
-                <div class='hp-fill' style='width: {p2_pct}%; background-color: {p2_color};'></div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.write("")
-    # Angriffs-Buttons für Spieler 2 (nur sichtbar wenn kein Bot-Modus)
-    if st.session_state.aktiver_spieler == 2 and not st.session_state.game_over and not bot_modus:
-        st.write("⚔️ WÄHLE DEINE ATTACKE:")
-        for atk in st.session_state.p2_attacks:
-            btn_label = f"{atk['name']} ({atk['type']} | Treffer: {atk['chance']}%)"
-            if st.button(btn_label, key=f"p2_{atk['name']}", use_container_width=True):
-                execute_turn(atk, 2, st.session_state.p1_name)
-                st.rerun()
-
-# --- 6. KAMPF-LOG UND GEWINNER-ANZEIGE ---
-st.write("---")
-st.subheader("📝 Kampf-Protokoll:")
-st.markdown(f"<div class='battle-log'>{st.session_state.log}</div>", unsafe_allow_html=True)
-
-if st.session_state.game_over:
-    st.balloons() # Konfetti-Regen im Browser!
-    if st.session_state.p1_hp <= 0:
-        winner = st.session_state.p2_name if not bot_modus else f"Die KI ({st.session_state.p2_name})"
-        st.success(f"🏆 {winner} hat gewonnen! {st.session_state.p1_name} ist K.O. gegangen!")
-    else:
-        st.success(f"🏆 Spieler 1 ({st.session_state.p1_name}) hat gewonnen! {st.session_state.p2_name} ist K.O. gegangen!")
+    if action == "LINKS":
+        st.session_state.player_dir = (st.session_state.player_dir - 1) % 4
+        st.session_state.log = "Du drehst dich nach links."
+    elif action == "RECHTS":
+        st.session_state.player_dir = (st.session_state.player_dir + 1) % 4
+        st.session_state.log = "Du drehst dich nach rechts."
+    elif action == "VORWÄRTS":
+        dx, dy = dirs[st.session_state.player_dir]
+        new_x = st.session_state.player_x + dx
+        new_y = st.session_state.player_y + dy
         
-    if st.button("🔄 Direkt Revanche fordern!", use_container_width=True):
-        start_neues_spiel()
-        st.rerun()
+        # Kollisionsabfrage
+        if WORLD_MAP[new_x][new_y] == 0:
+            st.session_state.player_x = new_x
+            st.session_state.player_y = new_y
+            st.session_state.log = "Du gehst einen Schritt vorwärts."
+            
+            # Zufälliger Kampf-Trigger (25% Chance bei jedem Schritt!)
+            if random.random() < 0.25:
+                st.session_state.game_state = "BATTLE"
+                st.session_state.current_enemy = random.choice(POKEMON_POOL)
+                st.session_state.enemy_hp = random.randint(60, 100)
+                st.session_state.log = f"⚠️ WILDES POKÉMON ENTTARNT! Ein wildes {st.session_state.current_enemy} greift an!"
+        else:
+            st.session_state.log = "💥 Autsch! Du bist gegen eine Wand gelaufen!"
+
+# --- 6. GAME INTERFACE RENDERING ---
+if st.session_state.game_state == "EXPLORE":
+    col_view, col_controls = st.columns([2, 1])
+    
+    with col_view:
+        st.subheader("📺 Deine 3D-Sicht auf die Welt:")
+        view_3d = render_3d_view(WORLD_MAP, st.session_state.player_x, st.session_state.player_y, st.session_state.player_dir)
+        st.markdown(f"<div class='screen-3d'>{view_3d}</div>", unsafe_allow_html=True)
+        
+        # Info-Anzeige
+        st.info(f"📝 **Log:** {st.session_state.log}")
+        
+    with col_controls:
+        st.subheader("🕹️ Steuerung")
+        
+        # Richtung anzeigen
+        dir_names = ["NORDEN ⬆️", "OSTEN ➡️", "SÜDEN ⬇️", "WESTEN ⬅️"]
+        st.metric(label="Blickrichtung", value=dir_names[st.session_state.player_dir])
+        st.write(f"Position: X={st.session_state.player_x} | Y={st.session_state.player_y}")
+        
+        # Das Steuerkreuz
+        st.write("")
+        col_up = st.columns([1,1,1])
+        with col_up[1]:
+            if st.button("⬆️ VOR", use_container_width=True):
+                move_player("VORWÄRTS")
+                st.rerun()
+                
+        col_lr = st.columns([1,1,1])
+        with col_lr[0]:
+            if st.button("⬅️ LINKS", use_container_width=True):
+                move_player("LINKS")
+                st.rerun()
+        with col_lr[2]:
+            if st.button("➡️ RECHTS", use_container_width=True):
+                move_player("RECHTS")
+                st.rerun()
+                
+        st.write("---")
+        if st.button("🎲 Cheat: Pokémon rufen", use_container_width=True):
+            st.session_state.game_state = "BATTLE"
+            st.session_state.current_enemy = random.choice(POKEMON_POOL)
+            st.session_state.enemy_hp = 80
+            st.rerun()
+
+# --- 7. KAMPF MODUS INTERFACE ---
+elif st.session_state.game_state == "BATTLE":
+    st.markdown(f"<div class='battle-box'><h2>⚔️ 1VS1 INSTANT POKÉ-BATTLE </h2><h3>Du kämpfst gegen ein wildes {st.session_state.current_enemy}!</h3></div>", unsafe_allow_html=True)
+    st.write("")
+    
+    col_p, col_e = st.columns(2)
+    with col_p:
+        st.subheader("🔴 Dein Team")
+        st.metric(label="Deine KP", value=f"{st.session_state.player_hp} / 100")
+        
+        # Angriffs-Buttons
+        if st.button("💥 Donnerblitz einsetzen (Schaden: 25)", use_container_width=True):
+            damage = random.randint(20, 30)
+            st.session_state.enemy_hp -= damage
+            st.session_state.log = f"Du triffst das wilde {st.session_state.current_enemy} für {damage} Schaden!"
+            
+            # Gegenschlag, wenn der Feind noch lebt
+            if st.session_state.enemy_hp > 0:
+                enemy_dmg = random.randint(10, 25)
+                st.session_state.player_hp -= enemy_dmg
+                st.session_state.log += f" Das wilde Pokémon schlägt zurück und macht {enemy_dmg} Schaden!"
+            st.rerun()
+            
+        if st.button("🩹 Trank nehmen (+30 KP)", use_container_width=True):
+            st.session_state.player_hp = min(100, st.session_state.player_hp + 30)
+            st.session_state.log = "Du hast dich geheilt! Das wilde Pokémon nutzt die Chance zum Angriff!"
+            st.session_state.player_hp -= random.randint(10, 20)
+            st.rerun()
+            
+    with col_e:
+        st.subheader(f"🔵 Wildes {st.session_state.current_enemy}")
+        st.metric(label="Gegner KP", value=f"{max(0, st.session_state.enemy_hp)}")
+        st.progress(max(0, min(100, st.session_state.enemy_hp)) / 100)
+
+    st.write("---")
+    st.info(f"💬 **Kampfbericht:** {st.session_state.log}")
+
+    # Kampf-Auswertung
+    if st.session_state.enemy_hp <= 0
